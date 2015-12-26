@@ -80,8 +80,10 @@ void ledFadeToBeat(){
 
 
 void sendDataToProcessing(char symbol, int data ){
+  
+    if(symbol == 'B'){
     Serial.print(symbol);                // symbol prefix tells Processing what type of data is coming
-    Serial.println(data);                // the data to send culminating in a carriage return
+    Serial.println(data);}                // the data to send culminating in a carriage return
   }
 
 
