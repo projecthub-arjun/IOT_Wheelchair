@@ -1,3 +1,5 @@
+#include "TimerOne.h"
+
 //  VARIABLES
 int pulsePin = 0;                 // Pulse Sensor purple wire connected to analog pin 0
 int blinkPin = 8;                // pin to blink led at each beat
@@ -34,9 +36,9 @@ void pulseRateMonitorInit(int pulse_pin, int blink_pin)
   int pulsePin = pulse_pin; 
   int blinkPin = blink_pin;
   pinMode(blinkPin,OUTPUT);
-  interruptSetup();
+  Timer1.initialize(2000);
+  Timer1.attachInterrupt(callback);  // attaches callback() as a timer overflow interrupt
 }
-
 
 
 
