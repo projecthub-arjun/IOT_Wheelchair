@@ -1,3 +1,4 @@
+#include <TimerOne.h>
 #include <NewPing.h>
 #include <Wire.h>
 
@@ -12,6 +13,17 @@
 
 // Setup the pins for Ultrasonic sensor
 NewPing sonar(12,13,100);
+
+//  Varaibles for Pulse rate monitoring
+int pulsePin = 0;                 // Pulse Sensor purple wire connected to analog pin 0
+int blinkPin = 8;                 // pin to blink led at each beat
+
+// These variables are volatile because they are used during the interrupt service routine!
+volatile int BPM;                   // used to hold the pulse rate
+volatile int Signal;                // holds the incoming raw data
+volatile int IBI = 600;             // holds the time between beats, the Inter-Beat Interval
+volatile boolean Pulse = false;     // true when pulse wave is high, false when it's low
+volatile boolean QS = false;        // becomes true when Arduoino finds a beat.
 
 void setup() 
 {
@@ -30,6 +42,9 @@ void setup()
   
   // Initialize the Accelerometer
   InitAccelerometer();
+  
+  // Initialize the Pulse rate sensor (data pin, buzzer pin)
+  pulseRateMonitorInit(0,8);
 
   // Begin Serial Communication with Raspberry Pi
   // Flush the buffer to avoid unwanted junk.
@@ -101,7 +116,7 @@ void loop()
       break;
     }
   }
-
+  sendPulseRate();
 }
 void forward(uint8_t motor_speed)
 {
@@ -220,4 +235,21 @@ float getPitchAngle()
   
   // Return the Angle with the horizontal, +ve value for uphill, -ve value for downhill
   return (atan(AccX/sqrt((AccY*AccY) + (AccZ*AccZ))) * 9.8 * 9.8) + 4.5;
+}
+int8_t sendPulseRate()
+{
+  if (QS == true)
+  {
+    Serial.print('B');Serial.println(BPM);
+    // reset the Quantified Self flag for next time
+    QS = false;
+  } 
+}
+void pulseRateMonitorInit(int pulse_pin, int blink_pin)
+{
+  int pulsePin = pulse_pin; 
+  int blinkPin = blink_pin;
+  pinMode(blinkPin,OUTPUT);
+  Timer1.initialize(2000);
+  Timer1.attachInterrupt(callback);  // attaches callback() as a timer overflow interrupt
 }
