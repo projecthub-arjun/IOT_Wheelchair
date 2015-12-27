@@ -1,4 +1,14 @@
 #include <NewPing.h>
+#include <Wire.h>
+
+// Default analog write value of motors
+#define MOTOR_DEFAULT_SPEED 150
+
+// Min distance to detected object in cm
+#define OBJECT_DETECTION_THRESHOLD 20
+
+// Baudrate 
+#define BAUD_RATE 9600
 
 // Setup the pins for Ultrasonic sensor
 NewPing sonar(12,13,100);
@@ -17,10 +27,13 @@ void setup()
   // Ultrasonic Sensor VCC (5V)
   pinMode(11,OUTPUT);
   digitalWrite(11,HIGH);
+  
+  // Initialize the Accelerometer
+  InitAccelerometer();
 
   // Begin Serial Communication with Raspberry Pi
   // Flush the buffer to avoid unwanted junk.
-  Serial.begin(9600);
+  Serial.begin(BAUD_RATE);
   Serial.flush();
 }
 
@@ -38,9 +51,10 @@ void loop()
       case 'F':
       {
         // Move if no object detected within 20cm
-        if(!objectDetected(20))
+        if(!objectDetected(OBJECT_DETECTION_THRESHOLD))
         {
-          forward(100);
+          int8_t angle = getPitchAngle();
+          forward(MOTOR_DEFAULT_SPEED + angle);
         }
       }
       break;
@@ -49,9 +63,10 @@ void loop()
       case 'B':
       {
         // Move if no object detected within 20cm
-        if(!objectDetected(20))
+        if(!objectDetected(OBJECT_DETECTION_THRESHOLD))
         {      
-          backwards(100);
+          int8_t angle = getPitchAngle();
+          backwards(MOTOR_DEFAULT_SPEED - angle);
         }
       }
       break;
@@ -60,9 +75,10 @@ void loop()
       case 'L':
       {
         // Move if no object detected within 20cm
-        if(!objectDetected(20))
+        if(!objectDetected(OBJECT_DETECTION_THRESHOLD))
         {      
-          anticlockwise(100);
+          int8_t angle = getPitchAngle();
+          anticlockwise(MOTOR_DEFAULT_SPEED + angle);
         }
       }
       break;
@@ -71,9 +87,10 @@ void loop()
       case 'R':
       {
         // Move if no object detected within 20cm
-        if(!objectDetected(20))
+        if(!objectDetected(OBJECT_DETECTION_THRESHOLD))
         {
-          clockwise(100);
+          int8_t angle = getPitchAngle();
+          clockwise(MOTOR_DEFAULT_SPEED + angle);
         }
       }
       break;
@@ -133,3 +150,74 @@ void halt()
      return false;
    }
  }
+ void InitAccelerometer()
+{
+  Wire.begin();
+  
+  // I2C Address of MPU 6050
+  Wire.beginTransmission(0x68);
+  
+  // PWR_MGMT_1 register (Power Management)
+  Wire.write(0x6B);
+  
+  // Set to zero (Wakes up the MPU-6050)
+  Wire.write(0);
+  
+  Wire.endTransmission(true);
+}
+
+float getAccZ()
+{
+  Wire.beginTransmission(0x68);
+  
+  // Read From Register 0x3F (ACCEL_ZOUT_H)
+  Wire.write(0x3F);
+  
+  Wire.endTransmission(false);
+  
+  // Request a total of 2 registers
+  Wire.requestFrom(0x68, 2, true); 
+ 
+  // 0x3F (ACCEL_ZOUT_H) & 0x40 (ACCEL_ZOUT_L) 
+  return (((Wire.read() << 8) | (Wire.read())) * 0.0006125); 
+}
+float getAccY()
+{
+  Wire.beginTransmission(0x68);
+  
+  // Read From Register 0x3D (ACCEL_YOUT_H)
+  Wire.write(0x3D);
+  
+  Wire.endTransmission(false);
+  
+  // Request a total of 2 registers
+  Wire.requestFrom(0x68, 2, true); 
+ 
+  // 0x3D (ACCEL_YOUT_H) & 0x3E (ACCEL_YOUT_L) 
+  return (((Wire.read() << 8) | (Wire.read())) * 0.0006125);  
+}
+
+float getAccX()
+{
+  Wire.beginTransmission(0x68);
+  
+  // Read From Register 0x3B (ACCEL_XOUT_H)
+  Wire.write(0x3B);
+  
+  Wire.endTransmission(false);
+  
+  // Request a total of 2 registers
+  Wire.requestFrom(0x68, 2, true); 
+ 
+  // 0x3B (ACCEL_ZOUT_H) & 0x3C (ACCEL_ZOUT_L) 
+  return (((Wire.read() << 8) | (Wire.read())) * 0.0006125);  
+}
+float getPitchAngle()
+{
+  float AccX = getAccX();
+  float AccY = getAccY();
+  float AccZ = getAccZ();
+  
+  // Return the Angle with the horizontal, +ve value for uphill, -ve value for downhill
+  return (atan(AccX/sqrt((AccY*AccY) + (AccZ*AccZ))) * 9.8 * 9.8) + 4.5;
+}
