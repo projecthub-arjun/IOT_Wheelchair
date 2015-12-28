@@ -10,7 +10,7 @@ volatile boolean secondBeat = true;       // used to seed rate array so we start
 
 // THIS IS THE TIMER 1 INTERRUPT SERVICE ROUTINE.
 // Timer 1 makes sure that we take a reading every 2 miliseconds
-// triggered when Timer1 counts to 124
+// Triggered when Timer1 counts to 124
 void callback()
 {
   Signal = analogRead(pulsePin);              // read the Pulse Sensor
@@ -103,7 +103,7 @@ void callback()
     firstBeat = true;                      // set these to avoid noise
     secondBeat = true;                     // when we get the heartbeat back
   }
-}// end isr
+}
 
 
 
