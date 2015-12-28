@@ -1,9 +1,6 @@
 #include <TimerOne.h>
 #include <NewPing.h>
 #include <Wire.h>
-#include <SoftwareSerial.h>
-
-SoftwareSerial bluetooth(2,3); // RX, TX
 
 // Default analog write value of motors
 #define MOTOR_DEFAULT_SPEED 150
@@ -53,9 +50,6 @@ void setup()
     // Flush the buffer to avoid unwanted junk.
     Serial.begin(BAUD_RATE);
     Serial.flush();
-
-    bluetooth.begin(BAUD_RATE);
-    bluetooth.flush();
 }
 
 void loop()
