@@ -28,8 +28,10 @@ volatile boolean QS = false;      // Becomes true when Arduoino finds a beat.
 void setup()
 {
     // Motor Control Pins
+    pinMode(4,OUTPUT);
     pinMode(5,OUTPUT);
     pinMode(6,OUTPUT);
+    pinMode(7,OUTPUT);
     pinMode(9,OUTPUT);
     pinMode(10,OUTPUT);
 
@@ -62,6 +64,11 @@ void loop()
         // Figure out what to do...
         action(serial_data);
     }
+    
+    if(objectDetected(OBJECT_DETECTION_THRESHOLD))
+    {
+        halt();
+    }
 
     // When No data is available on Serial port
     // Send Pulse rate data to Raspberry Pi
@@ -73,7 +80,7 @@ void action(byte serial_data)
     switch(serial_data)
     {
         // If character F received move forward
-        case 'F':
+        case 'u':
         {
             // Move if no object detected within 20cm
             if(!objectDetected(OBJECT_DETECTION_THRESHOLD))
@@ -85,7 +92,7 @@ void action(byte serial_data)
         break;
     
         // If character B received move backward
-        case 'B':
+        case 'd':
         {
             // Move if no object detected within 20cm
             if(!objectDetected(OBJECT_DETECTION_THRESHOLD))
@@ -97,7 +104,7 @@ void action(byte serial_data)
         break;
     
         // If character L received move anticlockwise
-        case 'L':
+        case 'l':
         {
             // Move if no object detected within 20cm
             if(!objectDetected(OBJECT_DETECTION_THRESHOLD))
@@ -109,7 +116,7 @@ void action(byte serial_data)
         break;
     
         // If character R received move clockwise
-        case 'R':
+        case 'r':
         {
             // Move if no object detected within 20cm
             if(!objectDetected(OBJECT_DETECTION_THRESHOLD))
@@ -128,38 +135,48 @@ void action(byte serial_data)
 }
 void forward(uint8_t motor_speed)
 {
-    digitalWrite(5,LOW);
-    analogWrite(6,motor_speed);
+    digitalWrite(4,LOW);
+    digitalWrite(7,HIGH);
     digitalWrite(9,LOW);
-    analogWrite(10,motor_speed);
+    digitalWrite(10,HIGH);
+    analogWrite(5,motor_speed);
+    analogWrite(6,motor_speed);
 }
 void backwards(uint8_t motor_speed)
 {
-    analogWrite(5,motor_speed);
-    digitalWrite(6,LOW);
-    analogWrite(9,motor_speed);
+    digitalWrite(4,HIGH);
+    digitalWrite(7,LOW);
+    digitalWrite(9,HIGH);
     digitalWrite(10,LOW);
+    analogWrite(5,motor_speed);
+    analogWrite(6,motor_speed);    
 }
 void anticlockwise(uint8_t motor_speed)
 {
-    digitalWrite(5,LOW);
-    analogWrite(6,motor_speed);
-    analogWrite(9,motor_speed);
+    digitalWrite(4,LOW);
+    digitalWrite(7,HIGH);
+    digitalWrite(9,HIGH);
     digitalWrite(10,LOW);
+    analogWrite(5,motor_speed);
+    analogWrite(6,motor_speed);    
 }
 void clockwise(uint8_t motor_speed)
 {
-    analogWrite(5,motor_speed);
-    digitalWrite(6,LOW);
+    digitalWrite(4,HIGH);
+    digitalWrite(7,LOW);
     digitalWrite(9,LOW);
-    analogWrite(10,motor_speed);
+    digitalWrite(10,HIGH);
+    analogWrite(5,motor_speed);
+    analogWrite(6,motor_speed);    
 }
 void halt()
 {
-    digitalWrite(5,LOW);
-    digitalWrite(6,LOW);
+    digitalWrite(4,LOW);
+    digitalWrite(7,LOW);
     digitalWrite(9,LOW);
     digitalWrite(10,LOW);
+    analogWrite(5,0);
+    analogWrite(6,0);
 }
 bool objectDetected(uint8_t threshold)
 {
@@ -250,7 +267,9 @@ int8_t sendPulseRate()
     if (QS == true)
     {
         // Send the Pulse rate to Raspberry Pi
-        Serial.print('B');Serial.println(BPM);
+        Serial.print('*');
+        Serial.print(BPM);
+        Serial.print('#');
         
         // Reset the Quantified Self flag for next time
         QS = false;
