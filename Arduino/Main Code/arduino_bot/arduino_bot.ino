@@ -11,6 +11,19 @@
 // Baudrate
 #define BAUD_RATE 9600
 
+// Pin to which buzzer is connected
+#define BUZZER_PIN 8
+
+// Pins to which motors are connected
+#define MOTOR_1_POSITIVE 4
+#define MOTOR_1_NEGATIVE 7
+
+#define MOTOR_2_POSITIVE 9
+#define MOTOR_2_NEGATIVE 10
+
+#define MOTOR_1_ENABLE_PIN 5
+#define MOTOR_2_ENABLE_PIN 6
+
 // Setup the pins for Ultrasonic sensor
 NewPing sonar(12,13,100);
 
@@ -25,15 +38,27 @@ volatile int IBI = 600;           // Holds the time between beats, the Inter-Bea
 volatile boolean Pulse = false;   // True when pulse wave is high, False when it's low.
 volatile boolean QS = false;      // Becomes true when Arduoino finds a beat.
 
+// Flag for switching modes
+bool joystick_enable_flag = false;
+
+// Variable for storinng data from serial
+byte serial_data = 's';
+
 void setup()
 {
-    // Motor Control Pins
-    pinMode(4,OUTPUT);
-    pinMode(5,OUTPUT);
-    pinMode(6,OUTPUT);
-    pinMode(7,OUTPUT);
-    pinMode(9,OUTPUT);
-    pinMode(10,OUTPUT);
+    // Output Pins
+    pinMode(MOTOR_1_POSITIVE,OUTPUT);
+    pinMode(MOTOR_1_ENABLE_PIN,OUTPUT);
+    pinMode(MOTOR_2_ENABLE_PIN,OUTPUT);
+    pinMode(MOTOR_1_NEGATIVE,OUTPUT);
+    pinMode(BUZZER_PIN,OUTPUT);
+    pinMode(MOTOR_2_POSITIVE,OUTPUT);
+    pinMode(MOTOR_2_NEGATIVE,OUTPUT);
+    
+    // Input pins for reading joystick
+    pinMode(A1,INPUT); // Switch
+    pinMode(A2,INPUT); // Y Axis
+    pinMode(A3,INPUT); // X Axis
 
     // Stop The motors, if it is currently running
     halt();
@@ -46,7 +71,7 @@ void setup()
     InitAccelerometer();
 
     // Initialize the Pulse rate sensor (data pin, buzzer pin)
-    pulseRateMonitorInit(0,8);
+    pulseRateMonitorInit(0,2);
 
     // Begin Serial Communication with Raspberry Pi
     // Flush the buffer to avoid unwanted junk.
@@ -54,26 +79,100 @@ void setup()
     Serial.flush();
 }
 
+
 void loop()
 {
-    if(Serial.available())
-    {
-        // When serial data is available, read one byte at a time
-        byte serial_data = Serial.read();
-
-        // Figure out what to do...
-        action(serial_data);
-    }
-    
-    if(objectDetected(OBJECT_DETECTION_THRESHOLD))
-    {
+    // If Joystick mode enabled
+    if(joystick_enable_flag == true)
+    {  
+      short x_axis = analogRead(A3);
+      short y_axis = analogRead(A2);
+      uint8_t motor_speed = 0;
+      if(y_axis < 400)
+      {
+        motor_speed = map(y_axis, 0, 400, 255, 0);
+        Serial.print("Go Up: ");Serial.println(motor_speed);
+        forward(motor_speed);
+      }
+      else if(y_axis > 600)
+      {
+        motor_speed = map(y_axis, 600, 1023, 0, 255);
+        Serial.print("Go Down: ");Serial.println(motor_speed);
+        backwards(motor_speed);
+      }
+      else if(x_axis < 400)
+      {
+        motor_speed = map(x_axis, 0, 400, 255, 0);
+        Serial.print("Go Left: ");Serial.println(motor_speed);
+        anticlockwise(motor_speed);
+      }
+      else if(x_axis > 600)
+      {
+        motor_speed = map(x_axis, 600, 1023, 0, 255);
+        Serial.print("Go Right: ");Serial.println(motor_speed);
+        clockwise(motor_speed);
+      }
+      else
+      {
+        Serial.println("Halted...");
         halt();
+      }
+    }   
+    else // IOT Mode
+    {
+      if(Serial.available())
+      {
+          // When serial data is available, read one byte at a time
+          serial_data = Serial.read();
+  
+          // Figure out what to do...
+          action(serial_data);
+      }
+      
+      // Stop if object detected while moving forward 
+      if(objectDetected(OBJECT_DETECTION_THRESHOLD) && serial_data == 'u')
+      {
+          halt();
+      }
     }
 
     // When No data is available on Serial port
     // Send Pulse rate data to Raspberry Pi
     sendPulseRate();
     
+    // Code Block for switching modes based on joystick switch press
+    // If Switch Pressed for more than 2sec mode will be toggled    
+    if(analogRead(A1) == 0)
+    {
+      unsigned long start_time = millis();
+      while(analogRead(A1) == 0)
+      {
+        unsigned long time_elapsed = millis() - start_time;
+        Serial.println(time_elapsed);
+        if(time_elapsed > 2000)
+        {
+           if(joystick_enable_flag == true)
+           {
+            Serial.println("Switching to Normal Mode...");
+            digitalWrite(BUZZER_PIN,HIGH);
+            delay(500);
+            digitalWrite(BUZZER_PIN,LOW);
+            Serial.flush();
+            joystick_enable_flag = false;
+            
+           }
+           else
+           {
+            Serial.println("Switching to Joystick Mode...");
+            digitalWrite(BUZZER_PIN,HIGH);
+            delay(500);
+            digitalWrite(BUZZER_PIN,LOW);
+            joystick_enable_flag = true;
+           }
+           break;
+        }
+      }
+    }    
 }
 void action(byte serial_data)
 {
@@ -94,36 +193,24 @@ void action(byte serial_data)
         // If character B received move backward
         case 'd':
         {
-            // Move if no object detected within 20cm
-            if(!objectDetected(OBJECT_DETECTION_THRESHOLD))
-            {
-              int8_t angle = getPitchAngle();
-              backwards(MOTOR_DEFAULT_SPEED - angle);
-            }
+            int8_t angle = getPitchAngle();
+            backwards(MOTOR_DEFAULT_SPEED - angle);
         }
         break;
     
         // If character L received move anticlockwise
         case 'l':
         {
-            // Move if no object detected within 20cm
-            if(!objectDetected(OBJECT_DETECTION_THRESHOLD))
-            {
-              int8_t angle = getPitchAngle();
-              anticlockwise(MOTOR_DEFAULT_SPEED + angle);
-            }
+            int8_t angle = getPitchAngle();
+            anticlockwise(MOTOR_DEFAULT_SPEED + angle);
         }
         break;
     
         // If character R received move clockwise
         case 'r':
         {
-            // Move if no object detected within 20cm
-            if(!objectDetected(OBJECT_DETECTION_THRESHOLD))
-            {
-              int8_t angle = getPitchAngle();
-              clockwise(MOTOR_DEFAULT_SPEED + angle);
-            }
+            int8_t angle = getPitchAngle();
+            clockwise(MOTOR_DEFAULT_SPEED + angle);
         }
         break;
     
@@ -135,58 +222,70 @@ void action(byte serial_data)
 }
 void forward(uint8_t motor_speed)
 {
-    digitalWrite(4,LOW);
-    digitalWrite(7,HIGH);
-    digitalWrite(9,LOW);
-    digitalWrite(10,HIGH);
-    analogWrite(5,motor_speed);
-    analogWrite(6,motor_speed);
+    digitalWrite(MOTOR_1_POSITIVE,LOW);
+    digitalWrite(MOTOR_1_NEGATIVE,HIGH);
+    
+    digitalWrite(MOTOR_2_POSITIVE,LOW);
+    digitalWrite(MOTOR_2_NEGATIVE,HIGH);
+    
+    analogWrite(MOTOR_1_ENABLE_PIN,motor_speed);
+    analogWrite(MOTOR_2_ENABLE_PIN,motor_speed);
 }
 void backwards(uint8_t motor_speed)
 {
-    digitalWrite(4,HIGH);
-    digitalWrite(7,LOW);
-    digitalWrite(9,HIGH);
-    digitalWrite(10,LOW);
-    analogWrite(5,motor_speed);
-    analogWrite(6,motor_speed);    
+    digitalWrite(MOTOR_1_POSITIVE,HIGH);
+    digitalWrite(MOTOR_1_NEGATIVE,LOW);
+    
+    digitalWrite(MOTOR_2_POSITIVE,HIGH);
+    digitalWrite(MOTOR_2_NEGATIVE,LOW);
+    
+    analogWrite(MOTOR_1_ENABLE_PIN,motor_speed);
+    analogWrite(MOTOR_2_ENABLE_PIN,motor_speed);    
 }
 void anticlockwise(uint8_t motor_speed)
 {
-    digitalWrite(4,LOW);
-    digitalWrite(7,HIGH);
-    digitalWrite(9,HIGH);
-    digitalWrite(10,LOW);
-    analogWrite(5,motor_speed);
-    analogWrite(6,motor_speed);    
+    digitalWrite(MOTOR_1_POSITIVE,LOW);
+    digitalWrite(MOTOR_1_NEGATIVE,HIGH);
+    
+    digitalWrite(MOTOR_2_POSITIVE,HIGH);
+    digitalWrite(MOTOR_2_NEGATIVE,LOW);
+    
+    analogWrite(MOTOR_1_ENABLE_PIN,motor_speed);
+    analogWrite(MOTOR_2_ENABLE_PIN,motor_speed);    
 }
 void clockwise(uint8_t motor_speed)
 {
-    digitalWrite(4,HIGH);
-    digitalWrite(7,LOW);
-    digitalWrite(9,LOW);
-    digitalWrite(10,HIGH);
-    analogWrite(5,motor_speed);
-    analogWrite(6,motor_speed);    
+    digitalWrite(MOTOR_1_POSITIVE,HIGH);
+    digitalWrite(MOTOR_1_NEGATIVE,LOW);
+    
+    digitalWrite(MOTOR_2_POSITIVE,LOW);
+    digitalWrite(MOTOR_2_NEGATIVE,HIGH);
+    
+    analogWrite(MOTOR_1_ENABLE_PIN,motor_speed);
+    analogWrite(MOTOR_2_ENABLE_PIN,motor_speed);    
 }
 void halt()
 {
-    digitalWrite(4,LOW);
-    digitalWrite(7,LOW);
-    digitalWrite(9,LOW);
-    digitalWrite(10,LOW);
-    analogWrite(5,0);
-    analogWrite(6,0);
+    digitalWrite(MOTOR_1_POSITIVE,LOW);
+    digitalWrite(MOTOR_1_NEGATIVE,LOW);
+    
+    digitalWrite(MOTOR_2_POSITIVE,LOW);
+    digitalWrite(MOTOR_2_NEGATIVE,LOW);
+    
+    analogWrite(MOTOR_1_ENABLE_PIN,0);
+    analogWrite(MOTOR_2_ENABLE_PIN,0);
 }
 bool objectDetected(uint8_t threshold)
 {
     uint8_t distance = (sonar.ping() / US_ROUNDTRIP_CM);
     if( distance <= threshold && distance != 0 )
     {
+       digitalWrite(BUZZER_PIN,HIGH);
        return true;
     }
     else
     {
+       digitalWrite(BUZZER_PIN,LOW);
        return false;
     }
 }
